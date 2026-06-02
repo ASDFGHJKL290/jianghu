@@ -1,0 +1,38 @@
+node_modules/
+dist/
+.vite/
+*.pyc
+__pycache__/
+.venv/
+*.bak_*
+*.bak-*
+*.item_bak*
+desktop/
+desktop2/
+desktop_temp/
+backup/
+bak/
+
+# 敏感配置
+.env
+
+# 运行时数据
+state/
+events/events.db
+events/*.json
+events/*.log
+
+# TTS音频
+events/tts_audio/
+events/voice/
+static/tts_audio/
+static/voice/
+
+# 模型权重文件（>100MB, GitHub不支持）
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.onnx

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pregen vs Genmove — 围棋死活题对比</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#c0b8b0;padding:40px;min-height:100vh;}
+h1{text-align:center;color:#f0d78c;margin-bottom:8px;font-size:1.6em;}
+.sub{text-align:center;color:#8a6d3b;font-size:.85em;margin-bottom:32px;}
+.grid{display:flex;flex-wrap:wrap;gap:24px;justify-content:center;}
+.card{background:linear-gradient(180deg,#1a1025,#0f1225);border:1px solid #8a6d3b33;border-radius:16px;padding:24px;width:340px;}
+.card h2{color:#f0d78c;font-size:1.1em;margin-bottom:4px;text-align:center;}
+.card .diff{color:#8a6d3b;font-size:.8em;text-align:center;margin-bottom:16px;}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.col{text-align:center;}
+.col-label{font-size:.7em;color:#8a6d3b;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;}
+.metric{padding:10px 8px;border-radius:8px;margin-bottom:6px;}
+.metric .val{font-size:1.4em;font-weight:bold;}
+.metric .unit{font-size:.7em;color:#888;margin-left:2px;}
+.metric .tag{font-size:.65em;display:block;color:#888;margin-top:2px;}
+.good .val{color:#4caf50;}
+.bad .val{color:#f44336;}
+.good{background:rgba(76,175,80,.06);border:1px solid rgba(76,175,80,.15);}
+.bad{background:rgba(244,67,54,.06);border:1px solid rgba(244,67,54,.15);}
+.neutral{background:rgba(138,109,59,.04);border:1px solid rgba(138,109,59,.1);}
+.summary{margin-top:12px;font-size:.8em;color:#888;line-height:1.6;padding:10px;background:rgba(138,109,59,.04);border-radius:8px;min-height:40px;}
+.speedup{text-align:center;margin-top:14px;padding:8px;border-radius:8px;background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.2);}
+.speedup .x{font-size:1.2em;color:#4caf50;font-weight:bold;}
+.btn{display:block;margin:32px auto 0;padding:12px 40px;background:linear-gradient(135deg,#2a1f3a,#1a1025);color:#c0b8b0;border:1px solid #8a6d3b44;border-radius:10px;font-size:1em;cursor:pointer;transition:.3s;}
+.btn:hover{color:#f0d78c;border-color:#8a6d3b88;box-shadow:0 0 20px rgba(138,109,59,.2);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.loading{text-align:center;color:#8a6d3b;padding:60px;}
+.loading .spinner{display:inline-block;width:32px;height:32px;border:3px solid #8a6d3b33;border-top-color:#8a6d3b;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{text-align:center;color:#f44336;padding:20px;}
+</style>
+</head>
+<body>
+<h1>Pregen vs Genmove 性能对比</h1>
+<p class="sub">服务需要先启动：python main.py（端口 8000）</p>
+<div id="app"><div class="loading"><div class="spinner"></div><p style="margin-top:16px">正在跑对比... 可能需要 1-2 分钟</p></div></div>
+<button class="btn" onclick="run()" id="rerunBtn" disabled>重新对比</button>
+
+<script>
+const API = 'http://localhost:8000/api/go/benchmark';
+
+async function run(){
+  const app = document.getElementById('app');
+  const btn = document.getElementById('rerunBtn');
+  app.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top:16px">正在跑对比... 可能需要 1-2 分钟</p></div>';
+  btn.disabled = true;
+
+  try{
+    const r = await fetch(API);
+    const data = await r.json();
+    render(data.problems);
+    btn.disabled = false;
+  }catch(e){
+    app.innerHTML = `<div class="error">无法连接到服务<br><small>请确认 python main.py 已在 8000 端口运行</small></div>`;
+    btn.disabled = false;
+  }
+}
+
+function render(problems){
+  const app = document.getElementById('app');
+  let html = '<div class="grid">';
+  for(const p of problems){
+    const pg = p.pregen, gm = p.genmove;
+    const speedup = gm.elapsed_sec > 0 ? (gm.elapsed_sec / Math.max(pg.elapsed_sec, 0.01)).toFixed(1) : '--';
+    html += `<div class="card">
+      <h2>${p.name}</h2>
+      <div class="diff">${p.difficulty} · ${p.id}</div>
+      <div class="compare">
+        <div class="col">
+          <div class="col-label">Pregen</div>
+          <div class="metric good"><div class="val">${pg.elapsed_sec.toFixed(1)}<span class="unit">s</span></div><div class="tag">耗时</div></div>
+          <div class="metric ${pg.solved?'good':'bad'}"><div class="val">${pg.solved?'已解':'未解'}</div><div class="tag">结果</div></div>
+          <div class="metric neutral"><div class="val">${pg.moves}</div><div class="tag">步数</div></div>
+        </div>
+        <div class="col">
+          <div class="col-label">Genmove</div>
+          <div class="metric ${gm.elapsed_sec>5?'bad':'good'}"><div class="val">${gm.elapsed_sec.toFixed(1)}<span class="unit">s</span></div><div class="tag">耗时</div></div>
+          <div class="metric ${gm.solved?'good':'bad'}"><div class="val">${gm.solved?'已解':'未解'}</div><div class="tag">结果</div></div>
+          <div class="metric neutral"><div class="val">${gm.moves}</div><div class="tag">步数</div></div>
+        </div>
+      </div>
+      <div class="speedup">Pregen 快 <span class="x">${speedup}x</span></div>
+      <div class="summary">Pregen: ${pg.summary}<br>Genmove: ${gm.summary}</div>
+    </div>`;
+  }
+  html += '</div>';
+  app.innerHTML = html;
+}
+
+run();
+</script>
+</body>
+</html>

@@ -1,0 +1,798 @@
+[
+  {
+    "id": "tsume_001",
+    "name": "角部活棋·初",
+    "difficulty": "入门",
+    "player_moves": [
+      {
+        "color": "B",
+        "coord": "E2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "F3",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "E1",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "F7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "G6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "G2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H3",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A4",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H4",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "E7",
+        "captures": 0
+      }
+    ],
+    "opponent_responses": [
+      {
+        "color": "W",
+        "coord": "F2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "H7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B4",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A5",
+        "captures": 1
+      },
+      {
+        "color": "W",
+        "coord": "D1",
+        "captures": 2
+      },
+      {
+        "color": "W",
+        "coord": "F6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G4",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "H2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E8",
+        "captures": 0
+      }
+    ],
+    "full_sequence": [
+      {
+        "color": "B",
+        "coord": "E2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "F3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "E1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "F7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F8",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "G6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "H7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B4",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A5",
+        "captures": 1
+      },
+      {
+        "color": "B",
+        "coord": "G2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D1",
+        "captures": 2
+      },
+      {
+        "color": "B",
+        "coord": "H6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G4",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A4",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "H4",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "H2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "E7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E8",
+        "captures": 0
+      }
+    ],
+    "verified": false,
+    "verification": "没有真眼，还没活",
+    "rounds": 3
+  },
+  {
+    "id": "tsume_002",
+    "name": "边路活棋·二",
+    "difficulty": "简单",
+    "player_moves": [
+      {
+        "color": "B",
+        "coord": "B3",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B1",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D1",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D2",
+        "captures": 0
+      }
+    ],
+    "opponent_responses": [
+      {
+        "color": "W",
+        "coord": "B6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E2",
+        "captures": 0
+      }
+    ],
+    "full_sequence": [
+      {
+        "color": "B",
+        "coord": "B3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D2",
+        "captures": 0
+      }
+    ],
+    "verified": true,
+    "verification": "对手无杀招判定",
+    "rounds": 1
+  },
+  {
+    "id": "tsume_003",
+    "name": "中央突围·三",
+    "difficulty": "中等",
+    "player_moves": [
+      {
+        "color": "B",
+        "coord": "C4",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C3",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "G3",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "F6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C1",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D8",
+        "captures": 0
+      }
+    ],
+    "opponent_responses": [
+      {
+        "color": "W",
+        "coord": "G5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "C6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "C7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "H3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "PASS"
+      },
+      {
+        "color": "W",
+        "coord": "G6",
+        "captures": 1
+      },
+      {
+        "color": "W",
+        "coord": "D9",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "PASS"
+      },
+      {
+        "color": "W",
+        "coord": "E8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "PASS"
+      },
+      {
+        "color": "W",
+        "coord": "C8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D7",
+        "captures": 0
+      }
+    ],
+    "full_sequence": [
+      {
+        "color": "B",
+        "coord": "C4",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G5",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "C6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "G3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "G2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "B5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "C7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "F6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "F7",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "D2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E2",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C2",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D1",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C5",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D6",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "C1",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "E1",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A7",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "A8",
+        "captures": 0
+      },
+      {
+        "color": "B",
+        "coord": "A6",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "B8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "H3",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "PASS"
+      },
+      {
+        "color": "W",
+        "coord": "G6",
+        "captures": 1
+      },
+      {
+        "color": "B",
+        "coord": "D8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D9",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "PASS"
+      },
+      {
+        "color": "W",
+        "coord": "E8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "PASS"
+      },
+      {
+        "color": "W",
+        "coord": "C8",
+        "captures": 0
+      },
+      {
+        "color": "W",
+        "coord": "D7",
+        "captures": 0
+      }
+    ],
+    "verified": true,
+    "verification": "对手无杀招(verify), visits=47",
+    "rounds": 3
+  }
+]

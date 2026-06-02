@@ -1,0 +1,99 @@
+{
+  "tsume_001": {
+    "player_moves": [
+      "E2",
+      "F3",
+      "B5",
+      "E1",
+      "B7",
+      "F7",
+      "G6",
+      "C6",
+      "A7",
+      "G2",
+      "H6",
+      "H3",
+      "H5",
+      "A4",
+      "H4",
+      "E7"
+    ],
+    "opponent_responses": [
+      "F2",
+      "D2",
+      "B6",
+      "F1",
+      "G7",
+      "A6",
+      "F8",
+      "H7",
+      "B4",
+      "A5",
+      "D1",
+      "F6",
+      "G5",
+      "G4",
+      "B5",
+      "H2",
+      "E8"
+    ],
+    "verified": false
+  },
+  "tsume_002": {
+    "player_moves": [
+      "B3",
+      "C2",
+      "B1",
+      "D1",
+      "D2"
+    ],
+    "opponent_responses": [
+      "B6",
+      "F2",
+      "A2",
+      "E2"
+    ],
+    "verified": true
+  },
+  "tsume_003": {
+    "player_moves": [
+      "C4",
+      "C3",
+      "G3",
+      "B6",
+      "B5",
+      "F6",
+      "D2",
+      "C2",
+      "C5",
+      "C1",
+      "A7",
+      "A6",
+      "D8"
+    ],
+    "opponent_responses": [
+      "G5",
+      "C6",
+      "G2",
+      "B7",
+      "C7",
+      "F7",
+      "E2",
+      "D1",
+      "D6",
+      "E1",
+      "A8",
+      "B8",
+      "H3",
+      "PASS",
+      "G6",
+      "D9",
+      "PASS",
+      "E8",
+      "PASS",
+      "C8",
+      "D7"
+    ],
+    "verified": true
+  }
+}
