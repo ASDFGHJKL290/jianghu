@@ -1,0 +1,348 @@
+{
+  "history": {
+    "店小二": [
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "excited",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "江湖规矩"
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.8,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "武当派"
+      },
+      {
+        "primary": "excited",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "八卦"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "sad",
+        "secondary": null,
+        "intensity": 0.6,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "难过"
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "举杯消愁愁更愁"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "sad",
+        "secondary": null,
+        "intensity": 0.6,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "难过"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "sad",
+        "secondary": null,
+        "intensity": 0.7,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "难过"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.7,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "解解愁"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.8,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "消愁"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.7,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "女儿红"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "不醉不归"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "不醉不归"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "女儿红"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "穷"
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "happy",
+        "secondary": null,
+        "intensity": 0.9,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "饿"
+      }
+    ],
+    "扫地僧": [
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "neutral",
+        "secondary": null,
+        "intensity": 0.0,
+        "trend": "decreasing",
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trigger_word": ""
+      },
+      {
+        "primary": "sad",
+        "secondary": null,
+        "intensity": 0.6,
+        "valence": 0.0,
+        "arousal": 0.5,
+        "dominance": 0.5,
+        "trend": "stable",
+        "trigger_word": "受伤"
+      }
+    ]
+  }
+}

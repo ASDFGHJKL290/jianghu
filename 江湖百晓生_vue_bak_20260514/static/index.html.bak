@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>江湖百晓生</title>
+<script src="/static/vue.global.prod.js"></script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- Toast -->
+  <div v-if="toast" class="toast">{{ toast }}</div>
+
+  <!-- ═══════════════════════════════════════
+       左区：场景 + 对话
+  ════════════════════════════════════════ -->
+  <div class="scene-area">
+
+    <!-- 顶栏 -->
+    <div class="scene-topbar">
+      <span style="font-size:1.1em">🏮</span>
+      <span class="stb-title">江 湖 百 晓 生</span>
+      <div class="stb-stats">
+        <span class="stb-stat">🌤️ <span>{{ weatherDisplay }}</span></span>
+        <span class="stb-stat">💰 <span>{{ silver }}两</span></span>
+        <span class="stb-stat">📅 第<span>{{ gameDay }}</span>天</span>
+        <span class="stb-stat" v-if="chapterInfo.chapter > 0">📖 第{{ chapterInfo.chapter }}章：{{ chapterInfo.title }}</span>
+      </div>
+    </div>
+
+    <!-- 场景主画面 -->
+    <div class="scene-view">
+      <!-- 战斗血量条 -->
+      <div v-if="combatActive" class="combat-hp-bar">
+        <div class="hp-side">
+          <div class="hp-name">👤 你</div>
+          <div class="hp-bar"><div class="hp-fill player" :style="{width:combatState.player_hp+'%'}"></div></div>
+          <div class="hp-val">{{ combatState.player_hp }}/100</div>
+        </div>
+        <div class="vs-text">VS</div>
+        <div class="hp-side">
+          <div class="hp-name">👤 {{ combatState.enemy_name }}</div>
+          <div class="hp-bar"><div class="hp-fill enemy" :style="{width:(combatState.enemy_hp/80*100)+'%'}"></div></div>
+          <div class="hp-val">{{ combatState.enemy_hp }}/80</div>
+        </div>
+      </div>
+      <!--
+        ████ 修复①：场景 SVG 统一动画 + 尺寸全铺满 ████
+        transition + :key 触发重绘，彻底解决光标在切换时残留问题
+      -->
+      <div class="scene-svg-wrap"
+           :class="{dimmed:chatOpen}"
+           :key="'scene-'+currentNpc">
+        <!-- 悦来酒楼 -->
+        <svg v-if="currentLocation==='悦来酒楼'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <!-- 背景图片 - 全屏铺满 -->
+          <image href="/static/image/店小二10.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <!-- 名字可点击 - 人物正下方 -->
+          <g class="npc-name" @click="openChat('店小二')">
+            <rect x="620" y="408" width="90" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="665" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🏮 店小二</text>
+          </g>
+        </svg>
+
+        <!-- 武林盟主府 -->
+        <svg v-else-if="currentLocation==='武林盟主府'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <!-- 背景图片 -->
+          <image href="/static/image/萧千秋.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <!-- 名字可点击 -->
+          <g class="npc-name" @click="openChat('武林盟主')">
+            <rect x="480" y="418" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="530" y="432" text-anchor="middle" fill="#D4A843" font-size="11">⚔️ 武林盟主</text>
+          </g>
+        </svg>
+
+        <!-- 少林寺 -->
+        <svg v-else-if="currentLocation==='少林寺'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/shaolinsi.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('扫地僧')">
+            <rect x="390" y="378" width="120" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="450" y="392" text-anchor="middle" fill="#D4A843" font-size="11">🙏 扫地僧</text>
+          </g>
+        </svg>
+
+        <!-- 丐帮总舵 -->
+        <svg v-else-if="currentLocation==='丐帮总舵'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/gaibangzongduo.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('洪七公')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🍜 洪七公</text>
+          </g>
+        </svg>
+
+        <!-- 华山思过崖 -->
+        <svg v-else-if="currentLocation==='华山思过崖'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/huashansiguoya.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('风清扬')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">⚔️ 风清扬</text>
+          </g>
+        </svg>
+
+        <!-- 桃花岛 -->
+        <svg v-else-if="currentLocation==='桃花岛'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/taohuadao.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('黄衫女')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">💊 黄衫女</text>
+          </g>
+        </svg>
+
+        <!-- 四川唐门 -->
+        <svg v-else-if="currentLocation==='四川唐门'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/tangmen.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('唐巧')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🦂 唐巧</text>
+          </g>
+        </svg>
+
+        <!-- 黑木崖 -->
+        <svg v-else-if="currentLocation==='黑木崖'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/heimuya.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('任盈盈')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🌸 任盈盈</text>
+          </g>
+        </svg>
+
+        <!-- 日月神教 -->
+        <svg v-else-if="currentLocation==='日月神教'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/riyueshenjiao.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('任我行')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🏴 任我行</text>
+          </g>
+        </svg>
+
+        <!-- 白驼山庄 -->
+        <svg v-else-if="currentLocation==='白驼山庄'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/baituoshanzhuang.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('欧阳克')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🐍 欧阳克</text>
+          </g>
+        </svg>
+
+        <!-- 黑龙潭 -->
+        <svg v-else-if="currentLocation==='黑龙潭'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/heilongtan.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('瑛姑')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">🎭 瑛姑</text>
+          </g>
+        </svg>
+
+        <!-- 江湖游医 -->
+        <svg v-else-if="currentLocation==='江湖游医'" viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <image href="/static/image/yiguan.png" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid slice"/>
+          <g class="npc-name" @click="openChat('平一指')">
+            <rect x="620" y="408" width="100" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="670" y="422" text-anchor="middle" fill="#D4A843" font-size="11">💉 平一指</text>
+          </g>
+        </svg>
+
+        <!-- 未知 / 默认场景 -->
+        <svg v-else viewBox="0 0 900 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <rect width="900" height="500" fill="#0A0E14"/>
+          <circle cx="450" cy="200" r="150" fill="none" stroke="#1A2030" stroke-width="1"/>
+          <circle cx="450" cy="200" r="200" fill="none" stroke="#1A2030" stroke-width=".5"/>
+          <text x="450" y="190" text-anchor="middle" fill="#2A3040" font-size="40" font-family="serif">?</text>
+          <text x="450" y="220" text-anchor="middle" fill="#2A3040" font-size="14">探索未知</text>
+          <!-- 神秘NPC -->
+          <g transform="translate(450,280)">
+            <ellipse cx="0" cy="80" rx="18" ry="5" fill="rgba(0,0,0,.3)"/>
+            <path d="M-20 30 Q-22 55 -18 80 L18 80 Q22 55 20 30Z" fill="#1A1A28"/>
+            <rect x="-18" y="-5" width="36" height="38" fill="#202038" rx="5"/>
+            <ellipse cx="0" cy="-20" rx="18" ry="20" fill="#E8C898"/>
+            <path d="M-18 -30 Q0 -45 18 -30 Q18 -10 0 -5 Q-18 -10 -18 -30Z" fill="#1A1A28"/>
+            <ellipse cx="-7" cy="-18" rx="3.5" ry="3" fill="#2A2A3A"/>
+            <ellipse cx="7" cy="-18" rx="3.5" ry="3" fill="#2A2A3A"/>
+            <circle cx="-7" cy="-18" r="1.5" fill="#A0B0D0"/>
+            <circle cx="7" cy="-18" r="1.5" fill="#A0B0D0"/>
+            <rect x="-20" y="-5" width="40" height="5" fill="#1A1A28" rx="2"/>
+          </g>
+          <!-- 名字可点击 -->
+          <g class="npc-name" @click="openChat('神秘大侠')">
+            <rect x="380" y="360" width="140" height="20" fill="rgba(14,12,8,.8)" rx="4"/>
+            <text x="450" y="374" text-anchor="middle" fill="#D4A843" font-size="11">🌙 神秘大侠</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- 点击提示 -->
+      <div class="tap-hint" v-if="!chatOpen">
+        <span>👆 点击 {{ currentNpc }} 进入对话</span>
+      </div>
+
+      <!-- ══ 对话弹出层 ══ -->
+      <div v-if="chatOpen" class="chat-overlay" :key="'chat-'+currentNpc">
+        <!-- 顶栏：NPC信息 -->
+        <div class="chat-top">
+          <div class="chat-portrait"><img v-if="currentAvatar.includes('/')" :src="currentAvatar" class="av-img"><span v-else class="av-emoji">{{ currentAvatar }}</span></div>
+          <div class="chat-info">
+            <div class="chat-npc-name">{{ currentNpc }}</div>
+            <div class="chat-npc-loc">📍 {{ currentLocation }}</div>
+          </div>
+          <button class="chat-close-btn" @click="closeChat">✕ 关闭</button>
+        </div>
+
+        <!-- 对话历史 -->
+        <div class="chat-body" ref="chatBodyRef">
+          <div v-if="currentMessages.length===0" style="text-align:center;color:var(--text-mute);padding:50px 0;font-size:.9em">
+            向 {{ currentNpc }} 询问江湖之事吧
+          </div>
+          <div v-for="(m,idx) in currentMessages" :key="idx"
+            class="msg" :class="m.role==='user'?'user':m.role==='system'?'sys':'bot'">
+            <div :class="m.role==='user'?'msg-user-av':'msg-av'">
+              <span v-if="m.role==='user'" class="av-emoji">🗡️</span>
+              <span v-else-if="m.role==='system'" class="av-emoji">📜</span>
+              <img v-else :src="currentAvatar" class="av-img-sm" @error="$event.target.style.display='none'" :alt="currentNpc">
+              <span v-if="false" class="av-emoji-sm">{{ currentNpc }}</span>
+            </div>
+            <div class="msg-bubble">{{ m.content }}</div>
+          </div>
+          <div v-if="loading" class="msg bot">
+            <div class="msg-av"><img v-if="currentAvatar.includes('/')" :src="currentAvatar" class="av-img"><span v-else class="av-emoji">{{ currentAvatar }}</span></div>
+            <div class="msg-bubble"><div class="loading-dots"><span></span><span></span><span></span></div></div>
+          </div>
+        </div>
+
+        <!-- 战斗快捷按钮 -->
+        <div v-if="combatActive" class="quick-row" style="background:#1A1510;padding:8px;border-radius:8px;margin-bottom:8px;">
+          <button class="quick-btn" style="background:#8B2020" @click="combatAction('attack')">💪 正面迎战</button>
+          <button class="quick-btn" style="background:#2A4A8B" @click="combatAction('trick')">🧠 智取</button>
+          <button class="quick-btn" style="background:#4A4A4A" @click="combatAction('retreat')">🏃 撤退</button>
+          <button class="quick-btn" style="background:#3A3A3A" @click="combatAction('status')">📊 查看状态</button>
+        </div>
+
+        <!-- 快捷问题 -->
+        <div class="quick-row">
+          <button v-for="q in quickQuestions" :key="q" class="quick-btn"
+            @click="sendQuick(q)" :disabled="loading">{{ q }}</button>
+        </div>
+
+        <!-- 输入区 -->
+        <div class="chat-foot">
+          <input class="chat-input" v-model="inputText"
+            :placeholder="'向'+currentNpc+'提问…'"
+            @keydown.enter.prevent="sendMessage" :disabled="loading">
+          <button class="mic-btn" :class="{recording:isRecording}" :disabled="loading"
+            @mousedown.prevent="startRecording" @mouseup.prevent="stopRecording"
+            @mouseleave.prevent="stopRecording"
+            @touchstart.prevent="startRecording" @touchend.prevent="stopRecording">
+            {{ isRecording?'🔴':'🎤' }}
+          </button>
+          <button class="send-btn" @click="sendMessage"
+            :disabled="loading||!inputText.trim()">🗡️ 发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       右区：游戏面板
+  ════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab-btn" :class="{active:activeTab==='char'}"  @click="activeTab='char'">👤</button>
+      <button class="tab-btn" :class="{active:activeTab==='quest'}" @click="activeTab='quest'">📜</button>
+      <button class="tab-btn" :class="{active:activeTab==='item'}"  @click="activeTab='item'">🎒</button>
+      <button class="tab-btn" :class="{active:activeTab==='shop'}"  @click="activeTab='shop';loadShop()">🏪</button>
+      <button class="tab-btn" :class="{active:activeTab==='map'}"   @click="activeTab='map'">🗺️</button>
+    </div>
+
+    <!-- 角色 -->
+    <div class="sidebar-content" :class="{active:activeTab==='char'}">
+      <div class="char-card">
+        <div class="char-hdr">
+          <div class="char-av-lg"><img src="/static/image/玩家.png" class="av-img"></div>
+          <div>
+            <div class="char-name">{{ playerName }}</div>
+            <div class="char-title">{{ playerTitle }}</div>
+          </div>
+        </div>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-lbl">血</span>
+            <div class="bar bar-hp"><div class="bar-fill" :style="{width:(hp/maxHp*100)+'%'}"></div></div>
+            <span class="bar-val">{{ hp }}/{{ maxHp }}</span>
+          </div>
+        </div>
+        <div class="rep-row">
+          <span class="rep-lbl">声望</span>
+          <span class="rep-badge" :class="rep>=0?'pos':'neg'">{{ rep>=0?'正派 '+rep:'邪派 '+Math.abs(rep) }}</span>
+        </div>
+        <!-- 修为境界 -->
+        <div class="realm-box">
+          <div class="realm-label">
+            <span class="realm-title">{{ realm.name }}·{{ playerTitle }}</span>
+            <span class="realm-level-badge">第{{ realm.level }}重</span>
+          </div>
+          <div class="realm-bar-row">
+            <div class="realm-bar">
+              <div class="realm-bar-fill" :style="{width:(realm.progress||0)+'%'}"></div>
+            </div>
+            <div class="realm-bar-text">
+              <span class="realm-exp-cur">{{ realm.progress_exp||0 }}</span>
+              <span class="realm-exp-sep">/</span>
+              <span class="realm-exp-need">{{ realm.is_max ? '—' : (realm.need||0) }}</span>
+            </div>
+          </div>
+          <div class="realm-next" v-if="!realm.is_max">
+            <span class="realm-next-icon">🌟</span>
+            <span>突破至「{{ realm.next }}」还需 {{ Math.max(0, (realm.need||0) - (realm.progress_exp||0)) }} 修为</span>
+          </div>
+          <div class="realm-next realm-max" v-else>
+            <span>🏆 已达最高境界</span>
+          </div>
+        </div>
+        <!-- 触发战斗按钮 -->
+        <button class="quick-btn" style="width:100%;margin-top:10px;background:#8B2020;border:1px solid #AA3030;color:#FFD0A0"
+          @click="startCombat" v-if="!combatActive">⚔️ 触发战斗</button>
+      </div>
+
+      <!-- 好感度 -->
+      <div class="char-card">
+        <div class="rel-title">❤️ 好感度</div>
+        <div class="rel-list">
+          <div v-for="rel in relations" :key="rel.npc" class="rel-item">
+            <div class="rel-av"><img v-if="rel.avatar.includes('/')" :src="rel.avatar" class="av-img-sm"><span v-else class="av-emoji-sm">{{ rel.avatar }}</span></div>
+            <div class="rel-name">{{ rel.npc }}</div>
+            <div class="rel-bar">
+              <div class="rel-fill" :style="{width:rel.val+'%',background:rel.val>=70?'#5A9A5A':rel.val>=40?'#8B7030':'#6A5A48'}"></div>
+            </div>
+            <div class="rel-val">{{ rel.val }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 任务 -->
+    <div class="sidebar-content" :class="{active:activeTab==='quest'}">
+      <div v-if="quests.length===0" class="quest-empty">
+        <div>📜 暂无进行中任务</div>
+        <div style="color:var(--text-mute);font-size:.78em">与NPC对话可触发任务</div>
+      </div>
+      <div v-for="q in quests" :key="q.qid" class="quest-item">
+        <div class="qi-top">
+          <span class="qi-icon">{{ q.type==='传说'?'🔮':'⭐' }}</span>
+          <span class="qi-name">{{ q.title }}</span>
+          <span class="qi-type">{{ q.type||'传闻' }}<span v-if="q.stars" class="qi-stars">{{ '⭐'.repeat(q.stars) }}</span></span>
+        </div>
+        <div class="qi-desc">{{ q.desc }}</div>
+        <div v-if="q.steps&&q.steps.length" class="qi-steps">
+          <div class="qi-step-bar">步骤 {{ (q.progress||{}).current_step||1 }}/{{ q.steps.length }}</div>
+          <div v-for="step in q.steps" :key="step.id" class="qi-step" :class="{done:((q.progress||{}).completed_steps||[]).includes(step.id)}">
+            <span class="qi-step-icon">{{ ((q.progress||{}).completed_steps||[]).includes(step.id)?'✅':'⬜' }}</span>
+            <span class="qi-step-text">{{ step.desc }}</span>
+          </div>
+        </div>
+        <div class="qi-reward">🎁 {{ q.reward }}</div>
+        <div class="qi-giveup" @click="abandonQuest(q)">放弃任务</div>
+      </div>
+    </div>
+
+    <!-- 道具 -->
+    <div class="sidebar-content" :class="{active:activeTab==='item'}">
+      <div class="item-grid">
+        <div v-if="items.length===0" class="item-empty">🎒 背包空空</div>
+        <div v-for="item in items" :key="item.name" class="item-card" @click="openItemDetail(item)">
+          <div class="item-icon">{{ item.icon }}</div>
+          <div class="item-name">{{ item.name }}</div>
+          <div class="item-count">×{{ item.count }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 地图面板 ══ -->
+    <div class="sidebar-content" :class="{active:activeTab==='map'}">
+      <!-- 地点快捷列表 -->
+      <div class="map-locations">
+        <div v-for="loc in mapLocations" :key="loc.name"
+          class="loc-item"
+          :class="{active:loc.npc===currentNpc,locked:!loc.unlocked}"
+          @click="onLocClick(loc)">
+          <div class="loc-dot"></div>
+          <span class="loc-icon">{{ loc.icon }}</span>
+          <span class="loc-name">{{ loc.name }}</span>
+          <span class="loc-status">{{ loc.unlocked?(loc.npc===currentNpc?'📍':'✅'):'🔒' }}</span>
+        </div>
+      </div>
+
+      <!-- 碎片收集 -->
+      <div class="map-frag">
+        <div class="map-frag-title">🧩 地图碎片</div>
+        <div style="margin-top:6px;font-size:.85em">
+          {{ mapFragments }}/3 碎片
+        </div>
+      </div>
+    </div>
+
+    <!-- 商店 -->
+    <div class="sidebar-content" :class="{active:activeTab==='shop'}">
+      <div class="shop-header">
+        <div class="shop-title">🏪 杂货铺</div>
+        <div class="shop-silver">💰 {{ silver }}两</div>
+      </div>
+      <div class="shop-grid">
+        <div v-for="(info,name) in shopItems" :key="name" class="shop-item">
+          <div class="shop-item-icon">{{ info.icon }}</div>
+          <div class="shop-item-name">{{ name }}</div>
+          <div class="shop-item-desc">{{ info.desc }}</div>
+          <div class="shop-item-price">💰 {{ info.price }}两</div>
+          <button class="shop-buy-btn" @click="buyItem(name)" :disabled="shopLoading || silver < info.price">
+            {{ silver >= info.price ? '购买' : '银两不足' }}
+          </button>
+        </div>
+      </div>
+      <div v-if="Object.keys(shopItems).length===0" class="shop-empty">
+        加载商品中...
+      </div>
+    </div>
+
+    <!-- ══ 道具详情弹窗 ══ -->
+    <div v-if="itemDetail" class="item-modal-overlay" @click.self="itemDetail=null">
+      <div class="item-modal">
+        <div class="item-modal-hdr">
+          <span class="item-modal-icon">{{ itemDetail.icon }}</span>
+          <span class="item-modal-name">{{ itemDetail.name }}</span>
+          <button class="item-modal-close" @click="itemDetail=null">✕</button>
+        </div>
+        <div class="item-modal-desc">{{ itemDetail.effectDesc }}</div>
+        <div class="item-modal-hint" v-if="itemDetail.canUse">
+          持有 <strong>{{ itemDetail.count }}</strong> 个，点击下方按钮使用
+        </div>
+        <div class="item-modal-hint" v-else>无法直接使用</div>
+        <!-- NPC选择下拉框（仅送礼道具显示） -->
+        <div class="npc-select-wrap" v-if="itemDetail.needSelectNpc">
+          <label>赠送给：</label>
+          <select v-model="selectedNpcForGift" class="npc-select">
+            <option v-for="rel in relations" :key="rel.npc" :value="rel.npc">
+              {{ rel.npc }} (好感: {{ rel.val }})
+            </option>
+          </select>
+        </div>
+        <div class="item-modal-btns">
+          <button class="item-use-btn" v-if="itemDetail.canUse" @click="useItem(itemDetail)">
+            {{ itemDetail.useBtnText }}
+          </button>
+          <button class="item-discard-btn" @click="itemDetail=null">返回</button>
+        </div>
+        <div v-if="itemResult" class="item-result">{{ itemResult }}</div>
+      </div>
+    </div>
+</aside>
+
+<!-- ═══ 新手引导：门派选择弹窗 ═══ -->
+<div v-if="tutorialModal" class="tut-modal">
+  <div class="tut-modal-inner">
+    <div class="tut-modal-title">🌿 选择你的门派</div>
+    <div class="tut-modal-sub">踏入江湖之前，先告诉老夫你师出何门</div>
+    <div class="tut-faction-grid">
+      <div class="tut-faction-card" @click="selectFaction('少林')">
+        <div class="tut-faction-icon">🏯</div>
+        <div class="tut-faction-name">少林派</div>
+        <div class="tut-faction-desc">天下武功出少林，易筋经名震武林</div>
+        <div class="tut-faction-bonus">初始武力+5，少林NPC好感+10</div>
+      </div>
+      <div class="tut-faction-card" @click="selectFaction('武当')">
+        <div class="tut-faction-icon">☯️</div>
+        <div class="tut-faction-name">武当派</div>
+        <div class="tut-faction-desc">以柔克刚，太极剑法圆转如意</div>
+        <div class="tut-faction-bonus">初始内力+5，武当NPC好感+10</div>
+      </div>
+      <div class="tut-faction-card" @click="selectFaction('丐帮')">
+        <div class="tut-faction-icon">🍜</div>
+        <div class="tut-faction-name">丐帮</div>
+        <div class="tut-faction-desc">天下第一大帮，降龙掌威震武林</div>
+        <div class="tut-faction-bonus">初始敏捷+5，店小二好感+15</div>
+      </div>
+      <div class="tut-faction-card" @click="selectFaction('无门派')">
+        <div class="tut-faction-icon">🌙</div>
+        <div class="tut-faction-name">江湖散人</div>
+        <div class="tut-faction-desc">不属于任何门派，自由闯荡四方</div>
+        <div class="tut-faction-bonus">初始银两+10，无门派限制</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 新手引导：战斗教学提示 ═══ -->
+<div v-if="tutorialStep===4" class="tut-toast-fixed">
+  <div>⚔️ 教学战斗已触发！</div>
+  <button class="tut-continue-btn" @click="markCombatWon">我已赢得战斗</button>
+</div>
+
+<!-- ═══ 新手引导：送礼提示 ═══ -->
+<div v-if="tutorialStep===5" class="tut-toast-fixed">
+  <div>🍶 请将【女儿红】赠送给店小二</div>
+  <div style="font-size:.8em;color:#aaa;margin-top:4px">（打开行囊，使用女儿红）</div>
+  <button class="tut-continue-btn" style="margin-top:8px" @click="markGiftSuccess">我已赠送</button>
+</div>
+
+<!-- ═══ 新手引导：地图解锁提示 ═══ -->
+<div v-if="tutorialStep===6" class="tut-toast-fixed">
+  <div>🧩 地图碎片+1！武林盟主府已解锁</div>
+  <div style="font-size:.8em;color:#aaa;margin-top:4px">点击左侧地图切换地点</div>
+  <button class="tut-continue-btn" style="margin-top:8px" @click="completeTutorial">进入江湖</button>
+</div>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

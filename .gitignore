@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 项目生成文件
+chroma_db/
+faiss_store/
+*.bin
+*.pkl
+
+# 废弃目录（已清理，防止重新出现）
+backup/
+bak/
+desktop/
+desktop2/
+desktop_temp/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# 环境变量
+.env
+
+# 系统
+.DS_Store
+Thumbs.db

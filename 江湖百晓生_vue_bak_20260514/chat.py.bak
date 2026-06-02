@@ -1,0 +1,716 @@
+﻿# -*- coding: utf-8 -*-
+"""
+chat.py — 江湖百晓生 v2.0 核心对话逻辑
+JianghuChat 类：整合知识库 / 任务系统 / 情感 / 动作 / 记忆
+"""
+
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+import os
+import random
+import re
+import json
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from utils import sanitize_input, truncate_history, clamp, now_iso
+from core import EmotionEngine, ActionParser, MemoryParser, MemoryManager
+from prompts import (
+    NPC_PROFILES, WEATHER_TYPES, ALL_QUESTS, RELATION_DELTA,
+    EMOTION_RULES, ACTION_RULES, MEMORY_RULES, relation_prompt,
+    PERMISSION_LOCK, NO_AI_RULES,
+    COMBAT_PROMPT, COMBAT_RULES,
+    CHAPTER_CONFIG,
+)
+
+
+class JianghuChat:
+    def __init__(self):
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 知识库路径（day25根目录）
+        self.knowledge_file = os.path.join(
+            os.path.dirname(base_dir), "江湖奇闻轶事知识库.md"
+        )
+        # Embedding 模型路径（多路径回退）
+        day24_base = os.path.dirname(os.path.dirname(base_dir))
+        self.embed_paths = [
+            os.path.join(base_dir, "models", "BAAI", "bge-large-zh-v1___5"),
+            os.path.join(day24_base, "day24", "models", "BAAI", "bge-large-zh-v1___5"),
+        ]
+        self.chroma_dir = os.path.join(base_dir, "jianghu_chroma_db_web")
+
+        # DeepSeek V4 Flash
+        ds_key = os.getenv("DEEPSEEK_API_KEY", "")
+        ds_base = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        self.llm = ChatOpenAI(
+            api_key=ds_key,
+            base_url=f"{ds_base}/v1",
+            model="deepseek-chat",
+            temperature=0.8,
+            request_timeout=60,
+            max_tokens=2000
+        )
+
+        # 延迟加载
+        self._embeddings = None
+        self._vector_store = None
+
+        self.weather = self._get_weather()
+        self.active_quests = {}   # {user_id: [quest]}
+        self.quest_completion = {}
+        self.quest_progress = {}  # {user_id: {qid: {current_step, completed_steps}}}
+        self.chapter_progress = {}  # {user_id: {"current_chapter": 1, "completed_chapters": [], "chapter_step": 0}}
+
+        self.emotion_engine = EmotionEngine()
+        self.action_parser   = ActionParser()
+        self.memory_parser   = MemoryParser()
+        self.memory = MemoryManager(base_dir)
+
+    # ── per-user 任务系统 ──────────────────────────
+    def _user_quests(self, user_id: str) -> list:
+        return self.active_quests.setdefault(user_id, [])
+
+    def _add_quest(self, user_id: str, quest: dict):
+        if not any(q.get("qid") == quest.get("qid") for q in self._user_quests(user_id)):
+            self._user_quests(user_id).append(quest)
+
+    # ── 延迟加载 Embedding ─────────────────────────
+    @property
+    def embeddings(self):
+        if self._embeddings is None:
+            for path in self.embed_paths:
+                if os.path.exists(path):
+                    self._embeddings = HuggingFaceEmbeddings(model_name=path)
+                    break
+            else:
+                self._embeddings = False
+        return self._embeddings or None
+
+    @property
+    def vector_store(self):
+        if self._vector_store is None:
+            self._init_vector_store()
+        return self._vector_store
+
+    def _init_vector_store(self):
+        try:
+            emb = self.embeddings
+            if emb is None:
+                raise FileNotFoundError("Embedding 模型不可用")
+            self._vector_store = Chroma(
+                persist_directory=self.chroma_dir,
+                embedding_function=emb
+            )
+            self._vector_store.similarity_search("test", k=1)
+            print(f"   [知识库] 已加载 {self.chroma_dir}")
+        except Exception:
+            try:
+                emb = self.embeddings
+                if emb is None:
+                    raise FileNotFoundError("Embedding 模型不可用，跳过知识库")
+                loader = TextLoader(self.knowledge_file, encoding="utf-8")
+                docs = loader.load()
+                splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
+                chunks = splitter.split_documents(docs)
+                self._vector_store = Chroma.from_documents(
+                    documents=chunks, embedding=emb, persist_directory=self.chroma_dir
+                )
+                print(f"   [知识库] 从 {self.knowledge_file} 重建完成")
+            except Exception as e:
+                self._vector_store = False
+                print(f"   [知识库] 不可用（{e}），对话功能不受影响")
+
+    def _get_weather(self):
+        today = random.choice(list(WEATHER_TYPES.keys()))
+        d = WEATHER_TYPES[today].copy()
+        d["type"] = today
+        d["date"] = "今日"
+        return d
+
+    def search_knowledge(self, q: str):
+        try:
+            if not self.vector_store:
+                return None
+            docs = self.vector_store.similarity_search(q, k=2)
+            return "\n".join(d.page_content for d in docs) if docs else None
+        except Exception:
+            return None
+
+    def check_quests(self, user_input: str, npc_name: str, user_id: str = "default") -> list:
+        user_lower = user_input.lower()
+        candidates = []
+        for qid, q in ALL_QUESTS.items():
+            if npc_name not in q["npc_permission"]:
+                continue
+            if self.quest_completion.get(user_id, {}).get(qid):
+                continue
+            prereq = q.get("prerequisite")
+            if prereq and not self.quest_completion.get(user_id, {}).get(prereq):
+                continue  # 前置任务未完成
+            if any(quest.get("qid") == qid for quest in self._user_quests(user_id)):
+                continue
+            matched = [kw for kw in q["trigger"] if kw.lower() in user_lower]
+            if matched:
+                candidates.append((len(matched), qid, q))
+        if not candidates:
+            return []
+        candidates.sort(reverse=True, key=lambda x: (x[0], len(x[2]["trigger"])))
+        best_qid, best_q = candidates[0][1], candidates[0][2]
+        return [{"qid": best_qid, **best_q}]
+
+    def _strip_json_suffix(self, text: str) -> str:
+        """去掉 LLM 输出末尾的 JSON 块（emotion / actions / combat）及残留标记"""
+        stripped = text.strip()
+        # 先清理常见残留标记
+        for junk in ["输出：", "输出:", "Output:", "→ 输出:", "→ 输出："]:
+            if stripped.endswith(junk):
+                stripped = stripped[:-len(junk)].strip()
+            # 也处理中间出现的（JSON被剥离后残留）
+            idx = stripped.rfind(junk)
+            if idx > len(stripped) - len(junk) - 10 and idx > 3:
+                stripped = stripped[:idx].strip()
+        if not stripped:
+            return stripped
+
+        # 方式 A-1：精确标记匹配（含战斗JSON {"hp":...）
+        for marker in ['{"emotion"', '{"emotion":', '{"actions"', '{"action":',
+                       '{"memory"', '{"memory":', "{'emotion'", "{'emotion':", "{'actions'}",
+                       '{\"hp\":', '{\"hp\":']:
+            idx = stripped.rfind(marker)
+            if idx > 3:
+                before = stripped[idx - 1]
+                if before in ("\n", "\r", " ", "\t"):
+                    return stripped[:idx].strip()
+
+        # 方式 A-2：换行后的 JSON 起始
+        for i in range(len(stripped) - 1, -1, -1):
+            if stripped[i] == "{" and i > 0:
+                j = i - 1
+                while j >= 0 and stripped[j] in (" ", "\t"):
+                    j -= 1
+                if j >= 0 and stripped[j] in ("\n", "\r"):
+                    prefix = stripped[:j + 1].strip()
+                    suffix = stripped[i:]
+                    if len(prefix) < len(stripped) * 0.3:
+                        continue
+                    suffix_lower = suffix.lower()
+                    if any(kw in suffix_lower for kw in ["emotion", "action", "primary", "intensity", "valence"]):
+                        return prefix
+                    break
+
+        # 方式 B：兜底
+        last_nl = max(stripped.rfind("\n"), stripped.rfind("\r"))
+        if last_nl > 0:
+            suffix = stripped[last_nl:].lower()
+            if "emotion" in suffix or "action" in suffix or "memory" in suffix:
+                return stripped[:last_nl].strip()
+        # 清理LLM输出的HP计算过程
+        hp_pats = [
+            r'(?m)^[ 	]*[-=*·•].*HP.*\d+[→\-+=].*\d+.*$',
+            r'(?m)^\*\*.*HP计算.*\*?$',
+            r'(?m)^.*(?:玩家|敌人|敌方|我方)?\s*HP[：:\s]*\d+\s*[→\-]+\s*\d+.*$',
+        ]
+        for pat in hp_pats:
+            stripped = re.sub(pat, '', stripped).strip()
+        stripped = re.sub('\n{3,}', '\n\n', stripped)
+
+        return stripped
+
+    def _extract_combat_json(self, text: str) -> dict:
+        """从LLM输出中提取战斗结果JSON"""
+        import re
+        # 匹配战斗状态JSON
+        pattern = r'\{"hp":\s*\d+,\s*"enemy_hp":\s*\d+,\s*"status":\s*"[^"]+"\}'
+        match = re.search(pattern, text)
+        if match:
+            try:
+                return json.loads(match.group())
+            except:
+                pass
+        return {"hp": 100, "enemy_hp": 100, "status": "ongoing"}
+
+    def _strip_combat_json(self, text: str) -> str:
+        """去掉战斗叙事末尾的JSON块，只保留武侠叙事文本"""
+        if not text:
+            return text
+        stripped = text.strip()
+        # 去掉末尾的JSON块（各种格式）
+        patterns = [
+            r'\{"hp"\s*:\s*\d+\s*,\s*"enemy_hp"\s*:\s*\d+\s*,\s*"status"\s*:\s*"[^"]+"\}',
+            r'\{\s*"hp"\s*:\s*\d+\s*,\s*"enemy_hp"\s*:\s*\d+\s*,\s*"status"\s*:\s*"[^"]+"\s*\}',
+            r"\{'hp'\s*:\s*\d+\s*,\s*'enemy_hp'\s*:\s*\d+\s*,\s*'status'\s*:\s*'[^']+'\s*\}",
+            r"\n\s*\{.*\}\s*$",
+        ]
+        for pat in patterns:
+            stripped = re.sub(pat, '', stripped, flags=re.DOTALL).strip()
+        return stripped
+
+    def chat(self, user_input: str, history: list, npc_name: str, user_id: str = "default", combat_mode: bool = False) -> dict:
+        """
+        返回完整响应 dict：
+        reply / emotion_state / actions / new_quests /
+        memory_update / relation_change / new_relation / _history
+        """
+        profile = NPC_PROFILES.get(npc_name, NPC_PROFILES["店小二"])
+        status, clean = sanitize_input(user_input)
+
+        if status != "ok":
+            reply = random.choice(profile["fallback_replies"][status])
+            return {
+                "reply": reply,
+                "emotion_state": self.emotion_engine._default(),
+                "actions": ["idle"],
+                "new_quests": [],
+                "memory_update": {"relation_change": {npc_name: 0}},
+                "relation_change": 0,
+                "new_relation": self.memory.get_relation("default", npc_name),
+                "_history": history,
+            }
+
+        # 任务检测
+        triggered_quests = self.check_quests(clean, npc_name, user_id)
+
+        # 章节进度检查
+        chapter_advancement = self.check_chapter_advancement(clean, npc_name, user_id)
+
+        # 任务文本
+        if triggered_quests:
+            q = triggered_quests[0]
+            quest_text = (
+                f"\n【系统任务已触发】\n━━━━━━━━━━━━━━━━\n"
+                f"✦ 任务名称：{q['title']}\n"
+                f"✦ 任务描述：{q['desc']}\n"
+                f"✦ 任务奖励：{q['reward']}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"【必须严格按格式发布，不得自创、不得修改内容】\n"
+                f"【任务发布】\n✦ 任务名称：{q['title']}\n"
+                f"✦ 描述：{q['desc']}\n✦ 奖励：{q['reward']}\n——{npc_name}\n"
+            )
+        else:
+            quest_text = "【本次未触发任务，严禁编造任何任务】"
+
+        # 进行中任务步骤引导
+        step_guidance = ""
+        for quest in self._user_quests(user_id):
+            qid = quest.get("qid")
+            prog = self.quest_progress.get(user_id, {}).get(qid)
+            if prog and quest.get("steps"):
+                step_idx = prog["current_step"] - 1
+                if 0 <= step_idx < len(quest["steps"]):
+                    step = quest["steps"][step_idx]
+                    step_guidance += (
+                        f"\n【当前任务·{quest['title']}（{step['id']}/{len(quest['steps'])}）】"
+                        f"待完成：{step['desc']}（自然引导玩家聊到相关话题完成此步骤，不要直接提示答案）\n"
+                    )
+
+        # 知识库（短文本/问候不搜）
+        short_patterns = [
+            "你好", "你好呀", "你好啊", "在吗", "哈哈", "嗯", "哦",
+            "嗨", "拜", "再见", "干嘛", "咋了", "有事", "没事",
+            "说说", "聊聊", "随便", "随便吧",
+        ]
+        if len(clean) < 8 or any(p in clean for p in short_patterns):
+            kb_text = ""
+        else:
+            knowledge = self.search_knowledge(clean)
+            kb_text = f"\n\n【江湖见闻】\n{knowledge}" if knowledge else ""
+        weather_str = (f"【今日天气】{self.weather['date']} "
+                       f"{self.weather['type']}：{self.weather['desc']}")
+
+        # 对话历史（截断）
+        history = truncate_history(history)
+        hist_text = "\n【对话记录】\n" + "\n".join(
+            f"{i['role']}：{i['content'][:80]}"
+            for i in history[-6:]
+        ) if history else ""
+
+        # 亲密度
+        intimacy = self.memory.get_relation("default", npc_name)
+
+        # 长期记忆读取
+        ltm = self.memory.get_longterm(npc_name)
+        ltm_text = (
+            "\n【NPC已知记忆】\n" + "\n".join(
+                f"- {e['event']}"
+                for e in ltm.get("key_events", [])[-10:]
+            )
+        ) if ltm.get("key_events") else ""
+
+        # 构建 Prompt（根据战斗模式选择）
+        if combat_mode:
+            system_content = (
+                profile["system_prompt"] + "\n\n"
+                + COMBAT_PROMPT + "\n\n"
+                + COMBAT_RULES + "\n\n"
+                + PERMISSION_LOCK.format(npc_name=npc_name)
+            )
+        else:
+            system_content = (
+                profile["system_prompt"] + "\n\n"
+                + PERMISSION_LOCK.format(npc_name=npc_name) + "\n\n"
+                + NO_AI_RULES + "\n\n"
+                + relation_prompt(npc_name, intimacy) + "\n\n"
+                + EMOTION_RULES + "\n\n"
+                + ACTION_RULES + "\n\n"
+                + MEMORY_RULES
+            )
+
+        human_content = (
+            f"{weather_str}{kb_text}\n{hist_text}\n{ltm_text}\n\n{quest_text}\n\n"
+            f"{step_guidance}\n【当前对话】\n玩家：{clean}"
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_content),
+            HumanMessage(content=human_content),
+        ])
+
+        # LLM 调用
+        try:
+            raw = (prompt | self.llm | StrOutputParser()).invoke({})
+        except Exception:
+            raw = (f"（{profile['avatar']}眉头一皱）江湖信号不佳，"
+                   f"{npc_name}一时走神……请少侠稍后再试。")
+
+        # 提取回复（去 JSON）
+        reply = self._strip_json_suffix(raw)
+        
+        # 提取礼物信息
+        gift_info = self._extract_gift(raw)
+        if gift_info:
+            reply = self._strip_gift(reply)
+        
+        # 战斗模式下提取战斗结果JSON
+        combat_result = None
+        if combat_mode:
+            combat_result = self._extract_combat_json(raw)
+
+        # 情感 & 动作
+        emotion_state = self.emotion_engine.infer(raw, npc_name)
+        actions = self.action_parser.parse(raw)
+
+        # LLM 记忆提取 → 写入长期记忆
+        memory_text = self.memory_parser.parse(raw)
+        if memory_text:
+            self.memory.update_longterm(npc_name, memory_text)
+
+        # 记忆持久化
+        rel_delta = RELATION_DELTA.get(emotion_state["primary"], 0)
+        if intimacy < 30 and emotion_state["primary"] in ["angry", "disgusted", "fearful"]:
+            rel_delta = max(rel_delta, -2)
+
+        # 亲密度本地计算 + 持久化（两处 clamp 结果一致，
+        # 避免 try-except 包裹 save_turn 导致 new_relation 丢失）
+        new_relation = clamp(intimacy + rel_delta, 0, 100)
+        memory_update = self.memory.save_turn(npc_name, {
+            "user": clean,
+            "assistant": reply,
+            "emotion": emotion_state["primary"],
+            "intensity": emotion_state["intensity"],
+            "relation_delta": rel_delta,
+            "timestamp": now_iso(),
+        })
+
+        # 任务加入活跃列表
+        for q in triggered_quests:
+            self._add_quest(user_id, q)
+            # 初始化任务进度
+            if "steps" in q:
+                self.quest_progress.setdefault(user_id, {})[q["qid"]] = {
+                    "current_step": 1,
+                    "completed_steps": []
+                }
+            self.memory.update_longterm(npc_name, f"触发任务：{q['title']}")
+
+        # 任务步骤推进
+        step_completions, quest_completions = self._advance_quest_step(clean, npc_name, user_id)
+        for sc in step_completions:
+            self.memory.update_longterm(npc_name, f"任务步骤完成：{sc['title']} - {sc['step_desc']}")
+        for qc in quest_completions:
+            self.memory.update_longterm(npc_name, f"任务完成：{qc['title']}！奖励：{qc['reward']}")
+
+        # 情感强度 > 0.7 → 写入长期记忆
+        if emotion_state["intensity"] >= 0.7 and emotion_state["trigger_word"]:
+            self.memory.update_longterm(npc_name, f"情感波动：{emotion_state['primary']}（{emotion_state['trigger_word']}）")
+
+        new_history = history + [
+            {"role": "user",      "content": clean},
+            {"role": "assistant", "content": reply},
+        ]
+
+        return {
+            "reply": reply,
+            "emotion_state": emotion_state,
+            "actions": actions,
+            "new_quests": triggered_quests,
+            "memory_update": memory_update,
+            "relation_change": rel_delta,
+            "new_relation": new_relation,
+            "combat_result": combat_result,
+            "quest_step_completed": step_completions,
+            "quest_completed": quest_completions,
+            "chapter_advancement": chapter_advancement,
+            "gift": gift_info,
+            "_history": new_history,
+        }
+
+
+
+
+
+
+    def combat_chat(self, npc_name: str, action: str, player_hp: int, enemy_hp: int,
+                      player_dmg: int, enemy_dmg: int, status: str) -> str:
+        """
+        生成战斗叙事描述。
+        所有伤害数值由系统（game.py）计算后传入，LLM 只负责写武侠叙事。
+        """
+        profile = NPC_PROFILES.get(npc_name, NPC_PROFILES["店小二"])
+        action_text = {
+            "attack": "正面强攻",
+            "trick":  "虚晃一枪，声东击西",
+            "retreat":"试图脱身撤退",
+        }.get(action, "发起进攻")
+
+        # 动作风格差异化引导
+        action_guide = {
+            "attack": (
+                "【本轮战术：正面强攻】\n"
+                "玩家选择硬碰硬、以力破力。你应描写刀剑相撞、火花四溅、双方内力对撼的场面。\n"
+                "描写要点：招式凌厉、气势如虹、硬桥硬马、不留余地。\n"
+                "对方反击时：正面招架、你争我夺、谁也不退让。"
+            ),
+            "trick": (
+                "【本轮战术：虚实结合·智取】\n"
+                "玩家选择以智取胜、诱敌深入。你应描写虚晃诱敌、声东击西、趁机偷袭的场面。\n"
+                "描写要点：虚实相生、诱敌入伏、趁虚而入、兵不厌诈。\n"
+                "对方反应：中了圈套、措手不及、陷入被动。"
+            ),
+            "retreat": (
+                "【本轮战术：寻隙脱身】\n"
+                "玩家不恋战、伺机撤退。你应描写玩家观察破绽、边挡边退、寻隙脱身的场面。\n"
+                "描写要点：保存实力、知进退、看清形势、不硬撑。\n"
+                "战斗是否成功逃脱，取决于status：escape=成功，ongoing=还在打。"
+            ),
+        }.get(action, "【本轮战术：进攻】玩家发起进攻。")
+
+        system_content = (
+            profile["system_prompt"] + "\n\n"
+            + COMBAT_PROMPT + "\n\n"
+            + COMBAT_RULES + "\n\n"
+            + PERMISSION_LOCK.format(npc_name=npc_name)
+        )
+
+        new_player_hp = max(0, player_hp - enemy_dmg)
+        new_enemy_hp = max(0, enemy_hp - player_dmg)
+
+        human_content = (
+            f"【本轮战斗由系统计算伤害，LLM只负责叙事】\n\n"
+            f"当前状态：\n"
+            f"- 玩家HP：{player_hp} → 受到 {enemy_dmg} 点伤害 → {new_player_hp}\n"
+            f"- 敌人HP：{enemy_hp} → 受到 {player_dmg} 点伤害 → {new_enemy_hp}\n"
+            f"- 战斗结果：{status}\n\n"
+            f"{action_guide}\n\n"
+            f"请基于以上数值和战术，写一段武侠风格的战斗叙事（100-200字），不要提及具体伤害数字，"
+            f"只描写动作、招式、交锋场面。\n"
+            f"末尾输出一行JSON：{{\"hp\":{new_player_hp},\"enemy_hp\":{new_enemy_hp},\"status\":\"{status}\"}}"
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_content),
+            HumanMessage(content=human_content),
+        ])
+
+        try:
+            raw = (prompt | self.llm | StrOutputParser()).invoke({})
+            stripped = self._strip_combat_json(raw)
+            if not stripped or len(stripped) < 10:
+                raise ValueError(f"LLM返回内容过短: {repr(stripped)}")
+            return stripped
+        except Exception as e:
+            # 打印到 stderr，方便排查
+            import sys; print(f"[combat_chat ERROR] {type(e).__name__}: {e}", file=sys.stderr)
+            fallback = {
+                "ongoing":  f"你{action_text}，招式凌厉！对方也不甘示弱，双方你来我往，激战数合。",
+                "victory":   f"你{action_text}，最后一招正中对方要害！敌人轰然倒地，你大获全胜！",
+                "defeat":    f"你{action_text}，然而对方招招致命，你渐渐体力不支，最终不支倒地……",
+                "escape":    f"你{action_text}，趁对方破绽之际纵身跃出战圈，成功脱身！",
+            }
+            return fallback.get(status, "双方激战，胜负未分。")
+
+    def _advance_quest_step(self, user_input: str, npc_name: str, user_id: str):
+        """根据用户输入推进任务步骤。返回 (step_completions, quest_completions)。"""
+        user_lower = user_input.lower()
+        step_completions = []
+        quest_completions = []
+
+        for quest in list(self._user_quests(user_id)):
+            qid = quest.get("qid")
+            steps = quest.get("steps", [])
+            if not steps:
+                continue
+
+            prog = self.quest_progress.setdefault(user_id, {}).setdefault(qid, {
+                "current_step": 1,
+                "completed_steps": []
+            })
+
+            step_idx = prog["current_step"] - 1
+            if step_idx < 0 or step_idx >= len(steps):
+                continue
+
+            step = steps[step_idx]
+            if step["id"] in prog["completed_steps"]:
+                continue
+
+            matched = [kw for kw in step.get("keywords", []) if kw in user_lower]
+            if matched:
+                prog["completed_steps"].append(step["id"])
+                prog["current_step"] = step["id"] + 1
+
+                step_completions.append({
+                    "qid": qid,
+                    "title": quest.get("title", ""),
+                    "step_id": step["id"],
+                    "step_desc": step["desc"],
+                    "total_steps": len(steps),
+                    "completed_count": len(prog["completed_steps"]),
+                })
+
+                # 检查是否所有步骤完成
+                if prog["current_step"] > len(steps):
+                    reward_data = quest.get("reward_data", {})
+                    # 记录完成（在移除活跃列表之前）
+                    if user_id not in self.quest_completion:
+                        self.quest_completion[user_id] = {}
+                    self.quest_completion[user_id][qid] = {
+                        "title": quest.get("title", ""),
+                        "reward": quest.get("reward", ""),
+                    }
+                    # 从活跃列表移除
+                    self.active_quests[user_id] = [
+                        q for q in self._user_quests(user_id) if q.get("qid") != qid
+                    ]
+                    # 清理进度
+                    if qid in self.quest_progress.get(user_id, {}):
+                        del self.quest_progress[user_id][qid]
+
+                    quest_completions.append({
+                        "qid": qid,
+                        "title": quest.get("title", ""),
+                        "reward": quest.get("reward", ""),
+                        "reward_data": reward_data,
+                        "next_hint": quest.get("next_hint", ""),
+                    })
+
+        return step_completions, quest_completions
+
+    # ── 章节进度系统 ─────────────────────────
+    def get_chapter_progress(self, user_id: str = "default") -> dict:
+        """获取用户的章节进度"""
+        return self.chapter_progress.setdefault(user_id, {
+            "current_chapter": 1,
+            "completed_chapters": [],
+            "chapter_step": 0
+        })
+
+    def advance_chapter(self, user_id: str = "default") -> dict:
+        """推进到下一章，返回新章节信息"""
+        prog = self.get_chapter_progress(user_id)
+        current = prog["current_chapter"]
+        
+        # 标记当前章节为完成
+        if current not in prog["completed_chapters"]:
+            prog["completed_chapters"].append(current)
+        
+        # 推进到下一章
+        prog["current_chapter"] = current + 1
+        prog["chapter_step"] = 0
+        
+        return prog
+
+    def _extract_gift(self, text: str) -> dict:
+        """从LLM输出中提取礼物JSON"""
+        import re
+        # 匹配礼物JSON: {"gift": {"item": "物品名", "from": "NPC名"}}
+        pattern = r'\{"gift":\s*\{"item":\s*"[^"]+",\s*"from":\s*"[^"]+"\}\}'
+        match = re.search(pattern, text)
+        if match:
+            try:
+                return json.loads(match.group())
+            except:
+                pass
+        
+        # 也尝试单引号格式
+        pattern2 = r"\{'gift':\s*\{'item':\s*'[^']+',\s*'from':\s*'[^']+'\}\}"
+        match2 = re.search(pattern2, text)
+        if match2:
+            try:
+                return json.loads(match2.group().replace("'", '"'))
+            except:
+                pass
+        
+        return None
+
+    def _strip_gift(self, text: str) -> str:
+        """去掉LLM输出末尾的礼物JSON块"""
+        if not text:
+            return text
+        stripped = text.strip()
+        
+        # 去掉礼物JSON块
+        patterns = [
+            r'\{"gift":\s*\{"item":\s*"[^"]+",\s*"from":\s*"[^"]+"\}\}',
+            r"\{'gift':\s*\{'item':\s*'[^']+',\s*'from':\s*'[^']+'\}\}",
+            r'\n\s*\{.*"gift".*\}\s*$',
+        ]
+        
+        for pat in patterns:
+            stripped = re.sub(pat, '', stripped, flags=re.DOTALL).strip()
+        
+        return stripped
+
+    def check_chapter_advancement(self, user_input: str, npc_name: str, user_id: str = "default") -> dict:
+        """检查是否应该推进章节"""
+        from prompts import CHAPTER_CONFIG
+        
+        prog = self.get_chapter_progress(user_id)
+        current_chapter = prog["current_chapter"]
+        
+        if current_chapter > 6:  # 所有章节已完成
+            return {"advanced": False, "completed_all": True}
+        
+        chapter_key = f"chapter_{current_chapter}"
+        if chapter_key not in CHAPTER_CONFIG:
+            return {"advanced": False, "completed_all": True}
+        
+        chapter_info = CHAPTER_CONFIG[chapter_key]
+        
+        # 检查用户输入是否匹配章节完成条件
+        completion_keywords = chapter_info.get("completion_keywords", [])
+        user_lower = user_input.lower()
+        
+        matched = [kw for kw in completion_keywords if kw.lower() in user_lower]
+        
+        if matched:
+            # 推进章节
+            new_prog = self.advance_chapter(user_id)
+            return {
+                "advanced": True,
+                "new_chapter": new_prog["current_chapter"],
+                "chapter_title": CHAPTER_CONFIG.get(f"chapter_{new_prog['current_chapter']}", {}).get("title", ""),
+                "completed_chapters": new_prog["completed_chapters"]
+            }
+        
+        return {"advanced": False, "current_chapter": current_chapter}
+

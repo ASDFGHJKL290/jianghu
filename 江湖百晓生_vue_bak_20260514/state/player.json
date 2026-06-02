@@ -1,0 +1,61 @@
+{
+  "game_day": 32,
+  "silver": 10,
+  "exp": 40,
+  "tutorial_step": 7,
+  "faction": "少林",
+  "active_quests": {
+    "default": []
+  },
+  "quest_completion": {
+    "default": {
+      "chu_ru_jiang_hu": {
+        "title": "初入江湖·第一章",
+        "reward": "声望+20，修为+30，地图碎片×1"
+      }
+    }
+  },
+  "quest_progress": {
+    "default": {}
+  },
+  "chapter_progress": {
+    "default": {
+      "current_chapter": 1,
+      "completed_chapters": [],
+      "chapter_step": 0
+    }
+  },
+  "player_items": [
+    {
+      "name": "少林基础拳谱",
+      "icon": "📖",
+      "count": 1
+    },
+    {
+      "name": "江湖地图碎片",
+      "icon": "🧩",
+      "count": 1
+    },
+    {
+      "name": "女儿红",
+      "icon": "🍶",
+      "count": 3,
+      "desc": "",
+      "effect": ""
+    },
+    {
+      "name": "药膏",
+      "icon": "🧴",
+      "count": 1,
+      "desc": "",
+      "effect": ""
+    },
+    {
+      "name": "小菜拼盘",
+      "icon": "🥘",
+      "count": 1,
+      "desc": "",
+      "effect": ""
+    }
+  ]
+}

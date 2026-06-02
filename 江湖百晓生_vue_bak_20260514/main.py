@@ -1,0 +1,455 @@
+# -*- coding: utf-8 -*-
+"""
+main.py — 江湖百晓生 v2.0 FastAPI 入口 & 路由
+业务逻辑已拆分至 game.py，本文件只负责 HTTP 层
+"""
+
+import os, uuid, time
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+import game as g
+
+# ── JianghuChat（延迟导入，避免循环依赖） ────────
+from chat import JianghuChat
+from prompts import NPC_PROFILES, ALL_QUESTS
+
+# ── 启动 FastAPI ────────────────────────────────
+app = FastAPI(title="江湖百晓生 v2.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# 注入 JianghuChat 实例
+g.chat = JianghuChat()
+g.load_all_state()
+
+# ── 静态文件 ────────────────────────────────────
+app.mount("/static", StaticFiles(directory=os.path.join(g.BASE_DIR, "static")), name="static")
+
+# ── 根路径 ──────────────────────────────────────
+@app.get("/")
+async def root_page():
+    return FileResponse(os.path.join(g.BASE_DIR, "static", "index.html"))
+
+
+# ════════════════════════════════════════════════
+# 聊天 API
+# ════════════════════════════════════════════════
+@app.post("/api/chat")
+async def api_chat(req: g.ChatReq):
+    npc = req.npc_name if req.npc_name in NPC_PROFILES else "店小二"
+    uid = req.user_id or "default"
+
+    g.update_activity(npc, uid)
+    h = g.get_hist(npc, uid)
+    resp = g.chat.chat(req.message, h, npc, uid)
+    g.set_hist(npc, uid, resp.pop("_history", []))
+    g.game_day += 1
+
+    quest_reward_info = []
+    breakthrough_info = None
+    old_realm = g.get_realm_info(g.exp)
+
+    for qc in resp.get("quest_completed", []):
+        rd = qc.get("reward_data", {})
+        if rd.get("exp"):  g.exp += rd["exp"]
+        if rd.get("silver"): g.silver += rd.get("silver", 0)
+        if rd.get("items"):
+            for it in rd["items"]:
+                found = next((x for x in g.player_items if x["name"] == it["name"]), None)
+                if found:
+                    found["count"] = found.get("count", 1) + it.get("count", 1)
+                else:
+                    g.player_items.append(dict(it))
+        # 亲密度奖励（完成对应NPC的任务提升好感）
+        if rd.get("intimacy"):
+            from_npc = qc.get("from_npc", npc)
+            g.chat.memory.update_relation(uid, from_npc, rd["intimacy"])
+            print(f"====== [DEBUG] intimacy +{rd['intimacy']} for {from_npc} ======")
+        quest_reward_info.append({
+            "title": qc.get("title", ""),
+            "reward": qc.get("reward", ""),
+            "next_hint": qc.get("next_hint", ""),
+        })
+
+    new_realm = g.get_realm_info(g.exp)
+    if new_realm["level"] > old_realm["level"]:
+        breakthrough_info = {
+            "old_level": old_realm["level"], "old_name": old_realm["name"],
+            "new_level": new_realm["level"], "new_name": new_realm["name"],
+            "new_title": new_realm["title"],
+        }
+
+    # 初入江湖任务完成 → 推进到 Step 4 教学战斗
+    tutorial_advanced = False
+    if g.tutorial_step in [2, 3]:
+        for qc in resp.get("quest_completed", []):
+            if "初入江湖" in qc.get("title", ""):
+                g.tutorial_step = 4; tutorial_advanced = True; break
+    
+    # 处理章节推进
+    chapter_advancement = resp.get("chapter_advancement", {"advanced": False})
+    
+    # 处理礼物信息
+    gift_info = resp.get("gift")
+    print(f"====== [DEBUG main.py] gift_info from resp: {gift_info} ======")
+    if gift_info and gift_info.get("item"):
+        item_name = gift_info["item"]
+        from prompts import NPC_GIFT_CONFIG
+        # 查找礼物配置
+        gift_config = None
+        for npc_name, cfg in NPC_GIFT_CONFIG.items():
+            for gift in cfg.get("items", []):
+                if gift.get("name") == item_name:
+                    gift_config = gift
+                    break
+            if gift_config:
+                break
+        # 也检查 milestone 礼物
+        if not gift_config:
+            for npc_name, cfg in NPC_GIFT_CONFIG.items():
+                for level, item in cfg.get("milestone", {}).items():
+                    if item.get("name") == item_name:
+                        gift_config = item
+                        gift_config["count"] = item.get("count", 1)
+                        break
+                if gift_config:
+                    break
+        
+        if gift_config:
+            print(f"====== [DEBUG main.py] gift_config FOUND: {gift_config} ======")
+            # 添加礼物到玩家物品列表
+            found = next((x for x in g.player_items if x["name"] == gift_config["name"]), None)
+            if found:
+                found["count"] = found.get("count", 1) + gift_config.get("count", 1)
+            else:
+                g.player_items.append({
+                    "name": gift_config["name"],
+                    "icon": gift_config.get("icon", "🎁"),
+                    "count": gift_config.get("count", 1),
+                    "desc": gift_config.get("desc", ""),
+                    "effect": gift_config.get("effect", "")
+                })
+            
+            # 富化 gift_info 传给前端弹窗（需要 icon/count/note 字段）
+            gift_info["icon"] = gift_config.get("icon", "🎁")
+            gift_info["count"] = gift_config.get("count", 1)
+            gift_info["note"] = gift_config.get("desc", "")
+            print(f"====== [DEBUG main.py] enriched gift_info: {gift_info} ======")
+            print(f"====== [DEBUG main.py] player_items after gift: {g.player_items} ======")
+    
+    # 新手引导完成指引
+    tutorial_complete_guide = None
+    if g.tutorial_step >= 7:
+        tutorial_complete_guide = g.TUTORIAL_COMPLETE_GUIDE
+
+    g.save_all_state()
+    print(f"====== [DEBUG main.py] final gift_info being sent: {gift_info} ======")
+    print(f"====== [DEBUG main.py] items count: {len(g.player_items)} ======")
+    return {
+        "reply": resp["reply"],
+        "new_quests": resp["new_quests"],
+        "quest_reward": quest_reward_info,
+        "quest_step_completed": resp.get("quest_step_completed", []),
+        "emotion_state": resp["emotion_state"],
+        "actions": resp["actions"],
+        "game_day": g.game_day,
+        "items": g.player_items,
+        "silver": g.silver,
+        "exp": g.exp,
+        "realm": new_realm,
+        "breakthrough": breakthrough_info,
+        "voice_params": {"speed": 1.0, "pitch": "0%", "volume": 1.0, "style": "default"},
+        "audio_url": None,
+        "new_relation": resp.get("new_relation"),
+        "tutorial_step": g.tutorial_step,
+        "tutorial_advanced": tutorial_advanced,
+        "chapter_advancement": chapter_advancement,
+        "gift": gift_info,
+        "tutorial_complete_guide": tutorial_complete_guide,
+    }
+
+@app.post("/api/chat/text")
+async def api_chat_text(req: g.ChatReq):
+    npc = req.npc_name if req.npc_name in NPC_PROFILES else "店小二"
+    uid = req.user_id or "default"
+    g.update_activity(npc, uid)
+    h = g.get_hist(npc, uid)
+    resp = g.chat.chat(req.message, h, npc, uid)
+    g.set_hist(npc, uid, resp.pop("_history", []))
+    g.game_day += 1
+    g.save_all_state()
+    return {
+        "reply": resp["reply"], "new_quests": resp["new_quests"],
+        "game_day": g.game_day, "exp": g.exp,
+        "realm": g.get_realm_info(g.exp),
+    }
+
+
+# ════════════════════════════════════════════════
+# 任务 API
+# ════════════════════════════════════════════════
+@app.get("/api/quests")
+async def get_quests(user_id: str = Query("default")):
+    return {"quests": g.chat._user_quests(user_id)}
+
+@app.get("/api/quest/progress")
+async def get_quest_progress(user_id: str = Query("default")):
+    result = []
+    for quest in g.chat._user_quests(user_id):
+        qid = quest.get("qid")
+        progress = g.chat.quest_progress.get(user_id, {}).get(qid)
+        result.append({**quest, "progress": progress or {"current_step": 1, "completed_steps": []}})
+    return {"quests": result}
+
+@app.post("/api/clear")
+async def clear_hist(req: g.ClearReq):
+    to_del = [k for k in g.histories if k.startswith(req.npc_name + "|")]
+    for k in to_del: del g.histories[k]
+    return {"ok": True}
+
+@app.post("/api/quest/abandon")
+async def abandon(req: g.AbandonReq):
+    uid = req.user_id or "default"
+    g.chat.active_quests[uid] = [q for q in g.chat.active_quests.get(uid, [])
+                                   if q.get("qid") != req.qid]
+    if req.qid in g.chat.quest_completion.get(uid, {}):
+        del g.chat.quest_completion[uid][req.qid]
+    g.save_all_state()
+    return {"status": "ok"}
+
+@app.get("/api/debug/quests")
+async def debug_quests(user_id: str = Query("default")):
+    return {"active": g.chat._user_quests(user_id),
+            "completed": list(g.chat.quest_completion.keys())}
+
+
+# ════════════════════════════════════════════════
+# 玩家状态 API
+# ════════════════════════════════════════════════
+@app.get("/api/weather")
+async def weather():
+    return g.chat.weather
+
+@app.get("/api/game_day")
+async def get_game_day():
+    return {"game_day": g.game_day}
+
+@app.get("/api/player")
+async def get_player():
+    realm = g.get_realm_info(g.exp)
+    return {
+        "game_day": g.game_day, "items": g.player_items, "silver": g.silver,
+        "exp": g.exp, "realm": realm,
+        "active_quests": g.chat.active_quests,
+        "quest_completion": g.chat.quest_completion,
+        "quest_progress": g.chat.quest_progress,
+    }
+
+@app.post("/api/player")
+async def save_player():
+    g.save_all_state()
+    return {"status": "ok", "game_day": g.game_day, "exp": g.exp,
+            "realm": g.get_realm_info(g.exp)}
+
+
+# ════════════════════════════════════════════════
+# NPC & 关系 API
+# ════════════════════════════════════════════════
+@app.get("/api/npcs")
+async def npcs():
+    return [{"name": k, "avatar": v["avatar"],
+             "location": v["location"], "greeting": v["greeting"]}
+            for k, v in NPC_PROFILES.items()]
+
+@app.get("/api/relation")
+async def get_relation(user_id: str = "default"):
+    return g.chat.memory.get_all_relations(user_id)
+
+@app.get("/api/emotion/{npc_name}")
+async def get_emotion(npc_name: str):
+    state = g.chat.emotion_engine._history.get(npc_name, [])
+    return state[-1] if state else g.chat.emotion_engine._default()
+
+@app.get("/api/memory/{npc_name}")
+async def get_memory(npc_name: str):
+    return g.chat.memory.get_longterm(npc_name)
+
+
+# ════════════════════════════════════════════════
+# 战斗 API
+# ════════════════════════════════════════════════
+@app.post("/api/combat/start")
+async def combat_start(req: g.CombatReq):
+    return g.combat_start(req.npc_name)
+
+@app.post("/api/combat/action")
+async def combat_action(req: g.CombatReq):
+    try:
+        # game.py 算伤害数值
+        result = g.combat_action(req.action, req.npc_name)
+        # status 动作已在 game.py 直接返回 reply，跳过 LLM
+        if req.action == "status":
+            return result
+        cr = result["combat_result"]
+        # LLM 生成武侠叙事
+        reply = g.chat.combat_chat(
+            npc_name=req.npc_name,
+            action=req.action,
+            player_hp=result["player_hp"],
+            enemy_hp=result["enemy_hp"],
+            player_dmg=cr.get("player_dmg", 0),
+            enemy_dmg=cr.get("enemy_dmg", 0),
+            status=cr["status"],
+        )
+        result["reply"] = reply
+        # 战斗胜利 / 突破时追加额外提示
+        if cr["status"] == "victory" and cr.get("exp_gained"):
+            result["reply"] += f"\n\n🎉 战斗胜利！获得 {cr['exp_gained']} 点修为！"
+            if cr.get("breakthrough"):
+                result["reply"] += f"\n🔥 境界突破：{cr['breakthrough']['old_name']} → {cr['breakthrough']['new_name']}！"
+        return result
+    except ValueError as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e), "reset_combat": True},
+            status_code=200,
+        )
+
+
+# ════════════════════════════════════════════════
+# 道具 API
+# ════════════════════════════════════════════════
+@app.post("/api/item/use")
+async def use_item(item_name: str = Form(...), target_npc: str = Form(default="")):
+    found = next((it for it in g.player_items if it["name"] == item_name), None)
+    if not found:
+        return JSONResponse({"ok": False, "error": "背包中没有此道具"}, status_code=400)
+    if found["count"] <= 0:
+        return JSONResponse({"ok": False, "error": "道具已用完"}, status_code=400)
+    effect = g.ITEM_EFFECTS.get(item_name)
+    if not effect:
+        return JSONResponse({"ok": False, "error": "此道具无法使用"}, status_code=400)
+
+    result_msg = ""; applied = {}
+    if effect["type"] == "hp":
+        applied["hp"] = effect["value"]
+        for _st in g.combat_state.values():
+            if _st.get("status") == "ongoing":
+                _st["player_hp"] = min(_st["player_hp"] + effect["value"], 100)
+        result_msg = f"你服下{found['name']}，恢复{effect['value']}点气血"
+    elif effect["type"] == "favor":
+        target = target_npc if target_npc else effect.get("target", "店小二")
+        new_favor = g.chat.memory.get_relation("default", target) + effect["value"]
+        g.chat.memory.update_relation("default", target, effect["value"])
+        applied["favor"] = {"npc": target, "value": new_favor}
+        result_msg = f"你将{found['name']}递给{target}，好感度+{effect['value']}"
+    elif effect["type"] == "equip":
+        applied["equip"] = item_name
+        result_msg = f"你装备了{found['name']}，战斗伤害+{effect['value']}%"
+    elif effect["type"] == "silver":
+        g.silver += effect["value"]; applied["silver"] = effect["value"]
+        result_msg = f"你取出碎银{effect['value']}两，现有{g.silver}两"
+
+    found["count"] -= 1
+    if found["count"] <= 0: g.player_items.remove(found)
+    g.save_all_state()
+    return {"ok": True, "message": result_msg, "applied": applied, "items": g.player_items}
+
+@app.get("/api/item/effects")
+async def get_item_effects():
+    return {"effects": g.ITEM_EFFECTS}
+
+
+# ════════════════════════════════════════════════
+# 商店 API
+# ════════════════════════════════════════════════
+@app.get("/api/shop/items")
+async def get_shop_items():
+    return {"items": g.SHOP_ITEMS, "silver": g.silver}
+
+@app.post("/api/shop/buy")
+async def shop_buy(req: g.ShopBuyReq):
+    if req.item_name not in g.SHOP_ITEMS:
+        return JSONResponse({"ok": False, "error": "商店没有此商品"}, status_code=400)
+    item_info = g.SHOP_ITEMS[req.item_name]
+    total = item_info["price"] * max(req.count, 1)
+    if g.silver < total:
+        return JSONResponse({"ok": False, "error": f"银子不足，需要{total}两"}, status_code=400)
+    g.silver -= total
+    found = next((it for it in g.player_items if it["name"] == req.item_name), None)
+    if found: found["count"] = found.get("count", 1) + max(req.count, 1)
+    else: g.player_items.append({"name": req.item_name, "icon": item_info["icon"], "count": max(req.count, 1)})
+    g.save_all_state()
+    return {
+        "ok": True, "message": f"购买成功！获得 {req.item_name} ×{max(req.count, 1)}",
+        "silver": g.silver, "items": g.player_items,
+        "exp": g.exp, "realm": g.get_realm_info(g.exp),
+    }
+
+
+# ════════════════════════════════════════════════
+# 地图 API
+# ════════════════════════════════════════════════
+@app.get("/api/map/status")
+async def map_status():
+    return {
+        "fragment_count": g.get_map_fragment_count(),
+        "unlocked": g.get_unlocked_locations(),
+    }
+
+@app.get("/api/map/unlock")
+async def map_unlock():
+    """手动消耗图碎解锁下一地点"""
+    cnt = g.get_map_fragment_count()
+    return {
+        "fragment_count": cnt,
+        "unlocked": g.get_unlocked_locations(),
+        "message": f"当前持有 {cnt} 片图碎，可前往已解锁地点探索" if cnt == 0
+                   else f"已解锁地点：{', '.join(g.get_unlocked_locations())}",
+    }
+
+
+# ════════════════════════════════════════════════
+# 新手引导 API
+# ════════════════════════════════════════════════
+@app.get("/api/tutorial/status")
+async def tutorial_status():
+    return g.tutorial_status()
+
+@app.post("/api/tutorial/start")
+async def tutorial_start(req: g.TutorialStartReq, user_id: str = Query("default")):
+    try:
+        return g.tutorial_start(req.faction, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/tutorial/complete-step")
+async def tutorial_complete_step(req: g.TutorialStepReq, user_id: str = Query("default")):
+    return g.tutorial_complete_step(req.action)
+
+
+# ════════════════════════════════════════════════
+# TTS API（DashScope，目前禁用）
+# ════════════════════════════════════════════════
+@app.post("/api/tts")
+async def tts(npc_name: str = Form(default="店小二"), text: str = Form(...)):
+    # TTS 额度已用完，直接返回 None
+    return {"audio_url": None}
+
+@app.get("/audio/{filename}")
+async def get_audio(filename: str):
+    safe_name = os.path.basename(filename)
+    audio_path = os.path.join(g.BASE_DIR, "audio", safe_name)
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="音频不存在")
+    return FileResponse(audio_path, media_type="audio/mpeg")
+
+
+# ════════════════════════════════════════════════
+# 启动
+# ════════════════════════════════════════════════
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)

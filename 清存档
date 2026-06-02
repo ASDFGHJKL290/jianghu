@@ -1,0 +1,5 @@
+# 清档（可选，如果想从头测）
+Remove-Item "C:\Users\aaa\PycharmProjects\day25\江湖百晓生_vue\state\player.json" -Force
+Remove-Item "C:\Users\aaa\PycharmProjects\day25\江湖百晓生_vue\state\emotions.json" -Force
+Remove-Item "C:\Users\aaa\PycharmProjects\day25\江湖百晓生_vue\state\histories\*" -Recurse -Force
+14:42
