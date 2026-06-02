@@ -33,3 +33,18 @@ Thumbs.db
 # 嵌套 git
 江湖百晓生_vue/.venv/
 江湖百晓生_vue/.git
+
+# IDE
+.idea/
+
+# 环境变量
+.env
+
+# 临时文件
+*.bak
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
