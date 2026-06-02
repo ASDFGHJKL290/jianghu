@@ -29,3 +29,7 @@ desktop_temp/
 # 系统
 .DS_Store
 Thumbs.db
+
+# 嵌套 git
+江湖百晓生_vue/.venv/
+江湖百晓生_vue/.git
