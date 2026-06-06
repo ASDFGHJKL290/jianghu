@@ -78,6 +78,7 @@ class JianghuChat:
         self.memory_parser   = MemoryParser()
         self.memory = MemoryManager(base_dir)
         self.motivation_manager = MotivationManager(base_dir, NPC_PROFILES)
+        self._model_download_attempted = False  # 防止反复尝试下载
 
         # 构建 qid → quest 反向映射（ALL_QUESTS 的 key 是中文名）
         self.qid_to_quest = {}
@@ -129,6 +130,31 @@ class JianghuChat:
             self._user_quests(user_id).append(quest)
 
     # ── 延迟加载 Embedding ─────────────────────────
+    def _download_model_from_modelscope(self, target_dir):
+        """从 ModelScope（魔搭）自动下载 BGE 模型，国内可直接访问"""
+        import subprocess
+        try:
+            from modelscope import snapshot_download
+            print("[chat] 从 ModelScope 下载 BGE-Large-ZH 模型...")
+            downloaded = snapshot_download(
+                "BAAI/bge-large-zh-v1.5",
+                cache_dir=os.path.dirname(target_dir),
+                revision="master"
+            )
+            # snapshot_download 返回的是 cache 路径，移到目标位置
+            if os.path.exists(downloaded) and not os.path.exists(target_dir):
+                import shutil
+                shutil.copytree(downloaded, target_dir)
+            print("[chat] 模型下载完成 ✓")
+            return True
+        except ImportError:
+            print("[chat] modelscope 未安装，尝试 pip install modelscope...")
+            subprocess.run(["pip", "install", "modelscope"], check=False)
+            return self._download_model_from_modelscope(target_dir)
+        except Exception as e:
+            print(f"[chat] ModelScope 下载失败: {e}")
+            return False
+
     @property
     def embeddings(self):
         if self._embeddings is None:
@@ -137,7 +163,16 @@ class JianghuChat:
                     self._embeddings = HuggingFaceEmbeddings(model_name=path)
                     break
             else:
-                self._embeddings = False
+                # 本地没有模型，尝试从 ModelScope 自动下载（只试一次）
+                if not self._model_download_attempted:
+                    self._model_download_attempted = True
+                    default_path = self.embed_paths[0]
+                    if self._download_model_from_modelscope(default_path):
+                        self._embeddings = HuggingFaceEmbeddings(model_name=default_path)
+                    else:
+                        self._embeddings = False
+                else:
+                    self._embeddings = False
         return self._embeddings or None
 
     @property
@@ -482,23 +517,25 @@ class JianghuChat:
         )
         mood_text = mood_behavior_prompt(mot.get("mood", "平静"))
 
-        # 统一记忆块（两层长期记忆 + session短期）
-        # 长期：不常用=经历 / 稀缺=最在意的事
-        # 短期：近期对话（session历史截断）
+        # 记忆块：按新四层系统检索
+        # 固化记忆（最在意的）→ 全部展示；普通记忆 → 权重前6条
         ltm = self.memory.get_longterm(npc_name)
         all_events = ltm.get("key_events", [])
-        uncommon = [e["event"] for e in all_events if e.get("layer") == "uncommon"][-4:]
-        rare    = [e["event"] for e in all_events if e.get("layer") == "rare"][-2:]
+        fixed_mem = [e for e in all_events if e.get("fixed", False)]
+        normal_mem = [e for e in all_events if not e.get("fixed", False)][:6]
+        # 合并：固化排前面，普通按权重排后面
+        selected = fixed_mem + normal_mem
+        mem_texts = [e["event"] for e in selected]
         mem_parts = []
-        if rare:
-            mem_parts.append("【最在意的事】\n" + "\n".join(f"- {e}" for e in rare))
-        if uncommon:
-            mem_parts.append("【经历】\n" + "\n".join(f"- {e}" for e in uncommon))
+        if fixed_mem:
+            mem_parts.append("【最在意的事】\n" + "\n".join(f"- {e['event']}" for e in fixed_mem))
+        if normal_mem:
+            mem_parts.append("【经历】\n" + "\n".join(f"- {e['event']}" for e in normal_mem))
         ltm_text = "\n\n".join(mem_parts) if mem_parts else ""
 
-        # 记录被检索到的记忆（触发权重增长 + 衰减 + 升降级）
+        # 记录被检索到的记忆（触发权重增长 + 衰减 + 固化）
         try:
-            self.memory.record_references(npc_name, uncommon + rare)
+            self.memory.record_references(npc_name, mem_texts)
         except AttributeError:
             pass  # 兼容旧版 MemoryManager
 
@@ -1147,28 +1184,35 @@ class JianghuChat:
         return {"error": "任务不存在"}
 
     def _extract_gift(self, text: str) -> dict:
-        """从LLM输出中提取礼物JSON"""
-        import re
-        # 匹配礼物JSON: {"gift": {"item": "物品名", "from": "NPC名"}}
-        pattern = r'\{"gift":\s*\{"item":\s*"[^"]+",\s*"from":\s*"[^"]+"\}\}'
-        match = re.search(pattern, text)
-        if match:
-            try:
-                data = json.loads(match.group())
-                return data.get("gift", data)  # 返回内层字典 {"item":..., "from":...}
-            except Exception:
-                pass
-        
-        # 也尝试单引号格式
-        pattern2 = r"\{'gift':\s*\{'item':\s*'[^']+',\s*'from':\s*'[^']+'\}\}"
-        match2 = re.search(pattern2, text)
-        if match2:
-            try:
-                data = json.loads(match2.group().replace("'", '"'))
-                return data.get("gift", data)  # 返回内层字典
-            except Exception:
-                pass
-        
+        """从LLM输出中提取礼物JSON（放松匹配，兼容额外字段、字段顺序变化、单引号）"""
+        if not text:
+            return None
+        import json as _json
+
+        for variant in [text, text.replace("'", '"')]:
+            buf = ""
+            depth = 0
+            for ch in variant:
+                if ch == '{':
+                    depth += 1
+                    buf += ch
+                    if depth == 1:
+                        buf = ch
+                elif ch == '}':
+                    depth -= 1
+                    buf += ch
+                    if depth == 0 and len(buf) > 15:
+                        try:
+                            data = _json.loads(buf)
+                            gift = data.get("gift", data)
+                            if isinstance(gift, dict) and "item" in gift and "from" in gift:
+                                return gift
+                        except Exception:
+                            pass
+                        buf = ""
+                else:
+                    if depth > 0:
+                        buf += ch
         return None
 
     def _strip_gift(self, text: str) -> str:
@@ -1177,15 +1221,9 @@ class JianghuChat:
             return text
         stripped = text.strip()
         
-        # 去掉礼物JSON块
-        patterns = [
-            r'\{"gift":\s*\{"item":\s*"[^"]+",\s*"from":\s*"[^"]+"\}\}',
-            r"\{'gift':\s*\{'item':\s*'[^']+',\s*'from':\s*'[^']+'\}\}",
-            r'\n\s*\{.*"gift".*\}\s*$',
-        ]
-        
-        for pat in patterns:
-            stripped = re.sub(pat, '', stripped, flags=re.DOTALL).strip()
+        # 宽松匹配所有 gift JSON 块
+        pattern = r'\{"gift"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\}'
+        stripped = re.sub(pattern, '', stripped, flags=re.DOTALL).strip()
         
         return stripped
 

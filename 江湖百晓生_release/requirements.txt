@@ -9,6 +9,7 @@ langchain-text-splitters
 python-dotenv
 huggingface-hub
 sentence-transformers
+modelscope
 chromadb
 python-multipart
 networkx

@@ -4,7 +4,9 @@ main.py — 江湖百晓生 v2.0 FastAPI 入口 & 路由
 业务逻辑已拆分至 game.py，本文件只负责 HTTP 层
 """
 
-import os, uuid, time, asyncio
+import os, uuid, time, asyncio, re
+# 关闭 LangSmith tracing（国内网络不通，会刷 ReadTimeout 错误）
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
@@ -172,12 +174,14 @@ async def api_chat(req: g.ChatReq):
     gift_info = resp.get("gift")
     if gift_info and gift_info.get("item"):
         item_name = gift_info["item"]
+        # 清理 LLM 可能附加的 emoji: "花瓣(🌸)" → "花瓣"
+        item_name_clean = re.sub(r'[^\w\u4e00-\u9fff]', '', item_name.split('(')[0].split('（')[0].strip())
         from npc_data import NPC_GIFT_CONFIG
-        # 查找礼物配置
+        # 查找礼物配置（先精确匹配，再模糊匹配）
         gift_config = None
         for npc_name, cfg in NPC_GIFT_CONFIG.items():
             for gift in cfg.get("items", []):
-                if gift.get("name") == item_name:
+                if gift.get("name") == item_name or gift.get("name") == item_name_clean:
                     gift_config = gift
                     break
             if gift_config:
@@ -186,7 +190,7 @@ async def api_chat(req: g.ChatReq):
         if not gift_config:
             for npc_name, cfg in NPC_GIFT_CONFIG.items():
                 for level, item in cfg.get("milestone", {}).items():
-                    if item.get("name") == item_name:
+                    if item.get("name") == item_name or item.get("name") == item_name_clean:
                         gift_config = item
                         gift_config["count"] = item.get("count", 1)
                         break
@@ -217,6 +221,20 @@ async def api_chat(req: g.ChatReq):
             gift_info["icon"] = gift_config.get("icon", "🎁")
             gift_info["count"] = gift_config.get("count", 1)
             gift_info["note"] = eff.get("desc", gift_config.get("desc", ""))
+        else:
+            # 兜底：配置中没找到礼物名称，直接创建基础道具
+            g.player_items.append({
+                "name": item_name,
+                "icon": "🎁",
+                "count": 1,
+                "type": "",
+                "value": 0,
+                "desc": "",
+                "effect": "",
+                "target": "",
+            })
+            gift_info["icon"] = "🎁"
+            gift_info["count"] = 1
     
     # 新手引导完成指引
     tutorial_complete_guide = None
@@ -404,12 +422,13 @@ async def get_npc_info(npc_name: str, user_id: str = "default"):
     ltm = g.chat.memory.get_longterm(npc_name)
     memories_by_layer = {"rare": [], "uncommon": [], "low": []}
     for evt in ltm.get("key_events", []):
-        w = g.chat.memory._compute_effective_weight(evt)
-        if w >= 70:
-            memories_by_layer["rare"].append({"event": evt["event"], "weight": w, "fixed": evt.get("fixed_layer", False)})
-        elif w >= 30:
+        w = evt.get("weight", 0.5)
+        fixed = evt.get("fixed", False)
+        if w >= 0.6 or fixed:
+            memories_by_layer["rare"].append({"event": evt["event"], "weight": w, "fixed": fixed})
+        elif w >= 0.3:
             memories_by_layer["uncommon"].append({"event": evt["event"], "weight": w})
-        elif w > 0:
+        elif w > 0.1:
             memories_by_layer["low"].append({"event": evt["event"], "weight": w})
 
     # 动机

@@ -48,3 +48,10 @@ Thumbs.db
 # 系统
 .DS_Store
 Thumbs.db
+
+# 运行时数据（不提交）
+state/
+events/
+memory/
+*.db
+*.sqlite
