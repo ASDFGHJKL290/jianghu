@@ -89,7 +89,6 @@ else:
                 time.sleep(0.05)
         return False
 
-
 # ============================================================
 # EmotionEngine
 # ============================================================
@@ -185,7 +184,6 @@ class ActionParser:
         filtered = [t for t in raw_tags if t in ACTION_LIBRARY]
         return filtered[:2] if filtered else ["idle"]
 
-
 # ============================================================
 # MemoryParser — 提取 LLM 输出的记忆内容
 # ============================================================
@@ -203,7 +201,6 @@ class MemoryParser:
         text = match.group(1)
         # 去掉末尾的句号或特殊字符，保留核心内容
         return text.strip()
-
 
 # ============================================================
 # MemoryManager
@@ -635,7 +632,6 @@ class MemoryManager:
         if event not in ws.get("world_events", []):
             ws.setdefault("world_events", []).append(event)
             _write_json(self.world_file, ws)
-
 
 # ============================================================
 # MotivationManager — NPC 动机状态管理
